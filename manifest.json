@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Billionaire Brother Execution Engine",
+  "version": "1.0.0",
+  "description": "BB execution layer for revenue-critical pages.",
+  "permissions": [
+    "sidePanel",
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "service-worker/index.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_title": "Open BB Panel"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/extract-page.js"]
+    }
+  ]
+}

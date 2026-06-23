@@ -1,0 +1,178 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  background: #0a0a0f;
+  color: #e4e4e7;
+  font-size: 14px;
+  line-height: 1.5;
+  min-width: 320px;
+}
+
+.panel {
+  padding: 20px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #27272a;
+}
+
+.logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #c9a227, #e8d48b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  color: #0a0a0f;
+}
+
+.panel-header h1 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fafafa;
+}
+
+/* ── States ──────────────────────────────────────────── */
+.state-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 16px;
+  text-align: center;
+}
+
+.state-msg .warn { color: #facc15; font-weight: 600; }
+.state-msg .hint { color: #71717a; font-size: 13px; }
+
+.error-text { color: #ef4444; font-weight: 500; }
+
+.greeting {
+  font-size: 15px;
+  color: #a1a1aa;
+  margin-bottom: 16px;
+}
+
+/* ── Spinner ─────────────────────────────────────────── */
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #27272a;
+  border-top-color: #c9a227;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Buttons ─────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #c9a227, #e8d48b);
+  color: #0a0a0f;
+}
+.btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+
+.btn-secondary {
+  background: #27272a;
+  color: #e4e4e7;
+}
+.btn-secondary:hover { background: #3f3f46; }
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 0;
+}
+
+/* ── Audit Result ────────────────────────────────────── */
+.audit-result {
+  flex: 1;
+}
+
+.audit-result h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fafafa;
+  margin-bottom: 4px;
+}
+
+.source-url {
+  font-size: 12px;
+  color: #71717a;
+  word-break: break-all;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #27272a;
+}
+
+.audit-result section {
+  margin-bottom: 20px;
+}
+
+.audit-result h3 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #c9a227;
+  margin-bottom: 6px;
+}
+
+.audit-result p {
+  color: #d4d4d8;
+  font-size: 14px;
+}
+
+.audit-result ul, .audit-result ol {
+  padding-left: 18px;
+}
+
+.audit-result li {
+  color: #d4d4d8;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.best-move {
+  background: #18181b;
+  border: 1px solid #c9a22744;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.best-move p { color: #fafafa; font-weight: 500; }
+
+.result-actions {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #27272a;
+  display: flex;
+  gap: 8px;
+}
