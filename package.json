@@ -1,21 +1,26 @@
 {
   "name": "bb-extension",
-  "version": "1.0.0",
+  "version": "1.0.15",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "watch": "node build.mjs --watch"
+    "watch": "node build.mjs --watch",
+    "verify": "node scripts/verify-package.mjs",
+    "test:pdf": "node scripts/verify-pdf.mjs",
+    "test:inspector": "node scripts/verify-inspector.mjs",
+    "test:swapper": "node scripts/verify-copy-swapper.mjs",
+    "package": "node build.mjs && node scripts/verify-package.mjs && node scripts/verify-pdf.mjs && node scripts/verify-inspector.mjs && node scripts/verify-copy-swapper.mjs && powershell -Command \"Compress-Archive -Path dist\\* -DestinationPath bb-extension.zip -Force\""
   },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "esbuild": "^0.21.0",
-    "typescript": "^5.4.0",
     "@types/chrome": "^0.0.268",
     "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0"
+    "@types/react-dom": "^18.2.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.4.0"
   }
 }

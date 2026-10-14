@@ -1,33 +1,52 @@
 {
   "manifest_version": 3,
+  "minimum_chrome_version": "120",
   "name": "Billionaire Brother Execution Engine",
-  "version": "1.0.0",
-  "description": "BB execution layer for revenue-critical pages.",
+  "version": "1.0.15",
+  "description": "Audits page copy and conversion signals you choose, then sends them to Billionaire Brother for analysis.",
   "permissions": [
     "sidePanel",
+    "tabs",
     "activeTab",
     "scripting",
-    "storage",
-    "contextMenus"
+    "storage"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "https://*/*",
+    "http://*/*",
+    "https://thebillionairebrother.com/*",
+    "https://www.google-analytics.com/*"
   ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*/*",
+        "http://*/*"
+      ],
+      "js": [
+        "content/extract-page.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "background": {
     "service_worker": "service-worker/index.js",
     "type": "module"
   },
   "action": {
-    "default_popup": "popup/index.html",
-    "default_title": "Open BB Panel"
+    "default_title": "Open BB Panel",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "side_panel": {
     "default_path": "sidepanel/index.html"
-  },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content/extract-page.js"]
-    }
-  ]
+  }
 }

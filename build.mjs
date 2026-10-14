@@ -1,11 +1,13 @@
 import * as esbuild from 'esbuild';
-import { copyFileSync, mkdirSync, existsSync } from 'fs';
-import { dirname, resolve } from 'path';
+import { copyFileSync, mkdirSync, existsSync, rmSync } from 'fs';
+import { dirname } from 'path';
 
 const outdir = 'dist';
 
-// Ensure dist exists
-if (!existsSync(outdir)) mkdirSync(outdir, { recursive: true });
+// Start from an empty package so removed or experimental files cannot remain
+// in a Chrome Web Store submission.
+rmSync(outdir, { recursive: true, force: true });
+mkdirSync(outdir, { recursive: true });
 
 // Build content script (IIFE — no module system in content scripts)
 await esbuild.build({
@@ -55,6 +57,12 @@ function copyStatic(src, dest) {
 copyStatic('src/sidepanel/index.html', `${outdir}/sidepanel/index.html`);
 copyStatic('src/sidepanel/styles.css', `${outdir}/sidepanel/styles.css`);
 copyStatic('src/popup/index.html', `${outdir}/popup/index.html`);
+
+// Copy icon PNG assets
+copyStatic('src/icons/icon16.png', `${outdir}/icons/icon16.png`);
+copyStatic('src/icons/icon48.png', `${outdir}/icons/icon48.png`);
+copyStatic('src/icons/icon128.png', `${outdir}/icons/icon128.png`);
+copyStatic('src/icons/icon512.png', `${outdir}/icons/icon512.png`);
 
 // Copy manifest.json → dist/manifest.json (already points to dist-relative paths)
 copyStatic('manifest.json', `${outdir}/manifest.json`);
