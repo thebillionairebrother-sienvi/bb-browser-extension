@@ -186,7 +186,7 @@ class DebugLogger {
       '```json',
       JSON.stringify(
         {
-          extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '1.0.16',
+          extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '1.0.17',
           userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
           ...meta,
         },

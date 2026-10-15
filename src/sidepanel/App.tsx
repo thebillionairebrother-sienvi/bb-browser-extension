@@ -113,12 +113,75 @@ function snapshotForStorage(snapshot: PageSnapshot | null) {
 }
 
 export function formatFriendlyError(err: any, context: 'extraction' | 'audit' | 'polling'): string {
-  const rawMsg = (err?.message || (typeof err === 'string' ? err : 'Unknown error')).toString();
-  const lower = rawMsg.toLowerCase();
+  const rawInput = (err?.message || (typeof err === 'string' ? err : 'Unknown error')).toString();
+  let extractedMsg = rawInput;
+  try {
+    const jsonStart = rawInput.indexOf('{');
+    if (jsonStart !== -1) {
+      const parsed = JSON.parse(rawInput.slice(jsonStart));
+      if (parsed?.error?.message) {
+        extractedMsg = `${parsed.error.code || ''} ${parsed.error.status || ''}: ${parsed.error.message}`.trim();
+      } else if (parsed?.error && typeof parsed.error === 'string') {
+        extractedMsg = parsed.error;
+      } else if (parsed?.message) {
+        extractedMsg = parsed.message;
+      }
+    }
+  } catch {}
 
-  // 1. Timeout / site took too long
+  const combined = `${rawInput} ${extractedMsg}`.toLowerCase();
+  const lower = extractedMsg.toLowerCase();
+
+  // 1. AI Model High Demand / 503 Service Unavailable (highest priority so it is never masked)
+  if (
+    combined.includes('503') ||
+    combined.includes('high demand') ||
+    combined.includes('unavailable') ||
+    combined.includes('overloaded') ||
+    combined.includes('model is currently experiencing')
+  ) {
+    return 'AI Model High Demand (Error 503): The Gemini AI model is currently experiencing high demand. Spikes in demand are temporary — please retry the audit in a few moments.';
+  }
+
+  // 2. AI Model Rate Limit / Quota / 429 Resource Exhausted
+  if (
+    combined.includes('429') ||
+    combined.includes('resource_exhausted') ||
+    combined.includes('quota') ||
+    combined.includes('rate limit')
+  ) {
+    return 'AI Model Rate Limit (Error 429): The AI audit engine reached a temporary rate or quota limit. Please wait a moment and retry the audit.';
+  }
+
+  // 3. Upstream AI API / Project Access Error (403 PERMISSION_DENIED from Gemini API, NOT browser tab permissions)
+  if (
+    combined.includes('permission_denied') ||
+    combined.includes('denied access') ||
+    combined.includes('api_key') ||
+    combined.includes('api key')
+  ) {
+    return 'Upstream AI Service Error (403): The AI model provider rejected the request due to an upstream API configuration or access issue. Please try again shortly.';
+  }
+
+  // 4. System or restricted browser pages (check before generic extraction errors)
+  if (
+    combined.includes('browser system pages') ||
+    combined.includes('restricted pages') ||
+    combined.includes('extensions gallery cannot be scripted') ||
+    combined.includes('chromewebstore') ||
+    combined.includes('chrome://') ||
+    combined.includes('about:') ||
+    combined.includes('chrome-extension://') ||
+    combined.includes('edge://') ||
+    combined.includes('cannot access a chrome')
+  ) {
+    return 'Cannot audit browser system or web store pages. Please navigate to a standard public website or landing page.';
+  }
+
+  // 5. Timeout / Aborted / Deadline Exceeded (differentiated between DOM extraction vs AI server/polling)
   if (
     err?.name === 'TimeoutError' ||
+    err?.name === 'AbortError' ||
     lower.includes('timeout') ||
     lower.includes('timed out') ||
     lower.includes('time out') ||
@@ -131,15 +194,15 @@ export function formatFriendlyError(err: any, context: 'extraction' | 'audit' | 
     lower.includes('deadline_exceeded')
   ) {
     if (context === 'extraction') {
-      return 'The webpage took too long to respond and timed out. Please verify that the page is fully loaded in your browser and try again.';
+      return 'The webpage took too long to respond during DOM extraction. Please verify that the page is fully loaded in your browser and try again.';
     }
     if (context === 'polling') {
-      return 'The strategic audit timed out while analyzing this website. Derek might be handling complex site analysis. Please refresh the page and try again.';
+      return 'The AI model is taking longer than expected (often caused by temporary Error 503 high demand on Gemini). Your webpage was scanned properly — please retry the audit in a moment.';
     }
-    return 'The audit request timed out while connecting to the server. Please check your internet connection and try again.';
+    return 'The audit request timed out while waiting for the AI server. The model may be experiencing high demand — please retry the audit in a moment.';
   }
 
-  // 2. Chrome error page or unreachable host
+  // 6. Chrome error page or unreachable host
   if (
     lower.includes('chrome-error://') ||
     lower.includes('chromewebdata') ||
@@ -151,55 +214,19 @@ export function formatFriendlyError(err: any, context: 'extraction' | 'audit' | 
     return 'This webpage failed to load or is unreachable in your browser. Please ensure the website loads properly, then try auditing again.';
   }
 
-  // 3. Tab Permission issues (only during page extraction)
-  if (
-    context === 'extraction' &&
-    (lower.includes('permission') ||
-      lower.includes('cannot access contents of url') ||
-      lower.includes('extension manifest must request permission') ||
-      lower.includes('access denied') ||
-      lower.includes('not allowed to access'))
-  ) {
-    return 'Permission to access this tab is required. If Chrome did not show the permission pop-up, please refresh the webpage tab and try again.';
-  }
-
-  // 3b. AI model limitations, demand spikes, or backend permission errors
-  if (
-    lower.includes('denied access') ||
-    lower.includes('permission_denied') ||
-    lower.includes('resource_exhausted') ||
-    lower.includes('quota') ||
-    lower.includes('high demand') ||
-    lower.includes('unavailable') ||
-    lower.includes('503')
-  ) {
-    return 'The AI audit engine is experiencing high demand or an upstream API limitation. Please try auditing again in a few moments.';
-  }
-
-  // 4. Content script connection issues
+  // 7. Webpage Content Script / Tab Connection issues (during DOM extraction)
   if (
     lower.includes('could not establish connection') ||
     lower.includes('receiving end does not exist') ||
-    lower.includes('the message port closed before a response was received')
+    lower.includes('the message port closed before a response was received') ||
+    (context === 'extraction' &&
+      (lower.includes('cannot access contents of url') ||
+        lower.includes('content script did not return')))
   ) {
-    return 'Could not connect to the webpage. Please refresh the webpage tab once so the extension can link with the page.';
+    return 'Could not connect to the webpage tab. Please refresh the webpage tab once so the extension can link with the page, then try again.';
   }
 
-  // 5. System or restricted pages
-  if (
-    lower.includes('browser system pages') ||
-    lower.includes('restricted pages') ||
-    lower.includes('extensions gallery cannot be scripted') ||
-    lower.includes('chromewebstore') ||
-    lower.includes('chrome://') ||
-    lower.includes('about:') ||
-    lower.includes('chrome-extension://') ||
-    lower.includes('edge://')
-  ) {
-    return 'Cannot audit browser system or web store pages. Please navigate to a standard public website or landing page.';
-  }
-
-  // 6. No active tab or URL detection issues
+  // 8. No active tab or URL detection issues
   if (lower.includes('no active') || lower.includes('no tab')) {
     return 'No active webpage tab was detected. Please ensure your target webpage is open beside this panel, then try again.';
   }
@@ -207,13 +234,86 @@ export function formatFriendlyError(err: any, context: 'extraction' | 'audit' | 
     return 'Unable to read the active webpage URL. Please ensure your target webpage is finished loading, then try again.';
   }
 
-  // 7. Network fetch failure
+  // 9. Network fetch failure
   if (lower.includes('failed to fetch') || lower.includes('networkerror')) {
     return 'Unable to reach the Billionaire Brother server. Please check your internet connection or try again shortly.';
   }
 
-  return rawMsg.replace(/^Error:\s*/i, '');
+  return extractedMsg.replace(/^Error:\s*/i, '');
 }
+
+export function classifyErrorUI(error: string | null): {
+  title: string;
+  tip: string | null;
+  needsTabRefresh: boolean;
+} {
+  const lower = (error || '').toLowerCase();
+
+  if (
+    lower.includes('503') ||
+    lower.includes('high demand') ||
+    lower.includes('unavailable') ||
+    lower.includes('taking longer than expected')
+  ) {
+    return {
+      title: 'AI Model High Demand (503)',
+      tip: 'Gemini is experiencing a temporary spike in traffic (Error 503). This is not a website permission issue — your webpage is ready and you can retry the audit directly below.',
+      needsTabRefresh: false,
+    };
+  }
+
+  if (lower.includes('429') || lower.includes('rate limit') || lower.includes('quota') || lower.includes('resource_exhausted')) {
+    return {
+      title: 'AI Rate Limit / Quota Reached',
+      tip: 'The AI engine hit a temporary rate or usage limit. Wait a few seconds and click Retry Audit below.',
+      needsTabRefresh: false,
+    };
+  }
+
+  if (lower.includes('upstream ai service') || lower.includes('permission_denied') || lower.includes('403')) {
+    return {
+      title: 'Upstream AI Service Error',
+      tip: 'The AI provider returned an upstream service error. Wait a moment and retry the audit below.',
+      needsTabRefresh: false,
+    };
+  }
+
+  if (lower.includes('cannot audit browser system') || lower.includes('restricted')) {
+    return {
+      title: 'Restricted Browser Page',
+      tip: 'Switch to a standard public http:// or https:// website tab and run the audit again.',
+      needsTabRefresh: false,
+    };
+  }
+
+  if (
+    lower.includes('webpage took too long') ||
+    lower.includes('could not connect to the webpage') ||
+    lower.includes('failed to load or is unreachable') ||
+    lower.includes('unable to read the active webpage')
+  ) {
+    return {
+      title: lower.includes('webpage took too long') ? 'Webpage Extraction Timeout' : 'Webpage Connection Needed',
+      tip: 'Ensure the webpage is completely loaded in your browser tab, or refresh the tab once so the extension can link with the page.',
+      needsTabRefresh: true,
+    };
+  }
+
+  if (lower.includes('timed out') || lower.includes('timeout')) {
+    return {
+      title: 'AI Audit Request Timed Out',
+      tip: 'The server or AI model took too long to respond. Click Retry Audit below to run it again without reloading your tab.',
+      needsTabRefresh: false,
+    };
+  }
+
+  return {
+    title: 'Audit Error',
+    tip: null,
+    needsTabRefresh: false,
+  };
+}
+
 
 async function checkSiteAccess(url: string): Promise<boolean> {
   try {
@@ -1301,7 +1401,7 @@ export function App() {
     if (state !== 'polling' || !runId) return;
 
     const startTime = Date.now();
-    const MAX_POLL_TIME_MS = 60000; // 60s timeout for audit completion
+    const MAX_POLL_TIME_MS = 90000; // 90s timeout for audit completion (allows fallback retries on 503)
 
     const pollInterval = setInterval(async () => {
       if (Date.now() - startTime > MAX_POLL_TIME_MS) {
@@ -1339,13 +1439,7 @@ export function App() {
           }, session?.userId);
         } else if (data.status === 'failed') {
           logger.error('audit', `Server audit run [${runId}] reported failure:`, data.error_message);
-          let rawError = data.error_message || 'Audit failed on server';
-          try {
-            const parsed = JSON.parse(rawError);
-            if (parsed?.error?.message) {
-              rawError = parsed.error.message;
-            }
-          } catch {}
+          const rawError = data.error_message || 'Audit failed on server';
           setError(formatFriendlyError(new Error(rawError), 'audit'));
           setState('error');
           clearInterval(pollInterval);
@@ -1412,10 +1506,12 @@ export function App() {
         chrome.storage.local.set({ [`bb_chat_${runId}`]: updatedHistory });
       }
     } catch (err: any) {
+      const friendlyChatError = formatFriendlyError(err, 'audit');
+      const is503 = friendlyChatError.toLowerCase().includes('503') || friendlyChatError.toLowerCase().includes('high demand');
       const errMsg: ChatMessage = {
         role: 'derek',
-        content: `Error: ${err.message || 'Unable to connect to Derek. Please try again.'}`,
-        reaction: 'Connection Issue',
+        content: friendlyChatError,
+        reaction: is503 ? 'AI High Demand (503)' : 'Service Issue',
         createdAt: new Date().toISOString(),
       };
       setChatMessages([...newHistory, errMsg]);
@@ -1709,39 +1805,6 @@ export function App() {
                 </div>
               ) : (
                 <div className="actions-card">
-                  {/* Warning banner when multi-page crawl permission is not yet granted */}
-                  {!activeTabInfo.isSystemPage && activeTabInfo.url && auditScope !== 'page' && !activeTabInfo.hasPermission && (
-                    <div className="permission-warning-banner">
-                      <div className="warning-banner-top">
-                        <div className="warning-banner-title">
-                          <span className="warning-banner-icon">⚠️</span>
-                          <span>Multi-Page Audit Permission Required</span>
-                        </div>
-                        <span className="warning-banner-badge">Action Required</span>
-                      </div>
-                      <p className="warning-banner-desc">
-                        Scanning multiple pages across <strong>{activeTabInfo.hostname || 'this site'}</strong> requires host access permission.
-                        Click <strong>Grant Access Now</strong> below to enable Whole Site and Sub-pages analysis.
-                      </p>
-                      <div className="warning-banner-actions">
-                        <button
-                          type="button"
-                          className="btn btn-warning-outline btn-sm"
-                          onClick={() => setShowPermissionModal(true)}
-                        >
-                          ℹ️ Permission Guide
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-gold btn-sm"
-                          onClick={handleRequestAccessNow}
-                        >
-                          🔑 Grant Access Now
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
                   <div className="scope-selector">
                     <label className="scope-label">Select Audit Target:</label>
                     <div className="scope-tabs">
@@ -1811,69 +1874,79 @@ export function App() {
             </div>
           )}
 
-          {state === 'error' && (
-            <div className="card-box error-card">
-              <div className="error-header">
-                <span className="error-icon">⚠️</span>
-                <p className="error-title">
-                  {error?.toLowerCase().includes('timeout') || error?.toLowerCase().includes('timed out')
-                    ? 'Webpage Response Timeout'
-                    : error?.toLowerCase().includes('tab permission')
-                    ? 'Tab Permission Required'
-                    : 'Audit Error'}
-                </p>
-              </div>
-              <p className="error-text">{error}</p>
-
-              {error?.toLowerCase().includes('timeout') && (
-                <div className="error-tip-box">
-                  <strong>💡 Tip:</strong> The website or server took too long to respond. Ensure the webpage is completely loaded in your browser and try again.
+          {state === 'error' && (() => {
+            const errorUI = classifyErrorUI(error);
+            return (
+              <div className="card-box error-card">
+                <div className="error-header">
+                  <span className="error-icon">⚠️</span>
+                  <p className="error-title">{errorUI.title}</p>
                 </div>
-              )}
+                <p className="error-text">{error}</p>
 
-              {error?.toLowerCase().includes('tab permission') && (
-                <div className="error-tip-box">
-                  <strong>💡 Tip:</strong> If Chrome's permission pop-up didn't appear, <strong>refresh the webpage tab you are on</strong> to initialize the prompt.
-                </div>
-              )}
+                {errorUI.tip && (
+                  <div className="error-tip-box">
+                    <strong>💡 Tip:</strong> {errorUI.tip}
+                  </div>
+                )}
 
-              <div className="error-actions">
-                <button
-                  type="button"
-                  className="btn btn-gold btn-full"
-                  onClick={handleRefreshActiveTabAndRetry}
-                >
-                  🔄 Refresh Webpage & Try Again
-                </button>
-                {error?.toLowerCase().includes('tab permission') && (
+                <div className="error-actions">
+                  {errorUI.needsTabRefresh ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-gold btn-full"
+                        onClick={handleRefreshActiveTabAndRetry}
+                      >
+                        🔄 Refresh Webpage & Try Again
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-full"
+                        onClick={runAudit}
+                      >
+                        ⚡ Retry Audit Without Refreshing
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-gold btn-full"
+                        onClick={runAudit}
+                      >
+                        ⚡ Retry Audit Now
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-full"
+                        onClick={handleRefreshActiveTabAndRetry}
+                      >
+                        🔄 Refresh Webpage & Reset
+                      </button>
+                    </>
+                  )}
+                  {isDevUser && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-full"
+                      onClick={() => setCurrentTab('logs')}
+                      style={{ borderColor: 'rgba(245, 158, 11, 0.5)', color: '#fef08a' }}
+                    >
+                      🛠️ View Diagnostic Logs
+                    </button>
+                  )}
                   <button
                     type="button"
-                    className="btn btn-secondary btn-full"
-                    onClick={() => setShowPermissionModal(true)}
+                    className="btn btn-subtle btn-full"
+                    onClick={reset}
                   >
-                    📋 View Permission Guide
+                    Dismiss
                   </button>
-                )}
-                {isDevUser && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-full"
-                    onClick={() => setCurrentTab('logs')}
-                    style={{ borderColor: 'rgba(245, 158, 11, 0.5)', color: '#fef08a' }}
-                  >
-                    🛠️ View Diagnostic Logs
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="btn btn-subtle btn-full"
-                  onClick={reset}
-                >
-                  Dismiss
-                </button>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {state === 'done' && auditResult && (
             <div className="audit-result">
